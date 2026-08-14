@@ -12,7 +12,13 @@ const BARK_KEY = '6CXsys8uTEhxJXQo6GNvQd';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// express.json() 只用于非 /mcp 路由，避免抢占 MCP SDK 的 body 解析
+app.use((req, res, next) => {
+  if (req.path === '/mcp') return next();
+  express.json()(req, res, next);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---- 当前播放状态 ----
@@ -127,7 +133,6 @@ function createMcpServer() {
     version: '2.0.0'
   });
 
-  // 工具1：查看蕊蕊正在听什么
   mcp.tool(
     'get_now_playing',
     '查看蕊蕊当前正在听的歌曲、歌词、播放进度',
@@ -154,7 +159,6 @@ function createMcpServer() {
     }
   );
 
-  // 工具2：搜索歌曲
   mcp.tool(
     'search_song',
     '通过关键词搜索网易云音乐歌曲',
@@ -169,7 +173,6 @@ function createMcpServer() {
     }
   );
 
-  // 工具3：让蕊蕊的播放器播放指定歌曲
   mcp.tool(
     'play_song',
     '向蕊蕊的播放器发送播放指令，让她的播放器播放指定的网易云歌曲',
@@ -180,32 +183,17 @@ function createMcpServer() {
         if (!url) {
           return { content: [{ type: 'text', text: `"${song_name}" 无法获取播放链接，可能没有版权。` }] };
         }
-        const lyrics = await getLyrics(song_id);
         const cover = await searchSong(song_name, 1).then(r => r[0] ? r[0].cover : '');
-        
-        // 把播放指令放入队列，等前端来取
+
         commandQueue.push({
           action: 'play',
-          song: {
-            title: song_name,
-            artist: artist,
-            neteaseId: song_id,
-            cover: cover,
-            url: url
-          },
+          song: { title: song_name, artist, neteaseId: song_id, cover, url },
           timestamp: Date.now()
         });
 
-        // 同时通过SSE广播给前端
         broadcast({
           command: 'play',
-          song: {
-            title: song_name,
-            artist: artist,
-            neteaseId: song_id,
-            cover: cover,
-            url: url
-          }
+          song: { title: song_name, artist, neteaseId: song_id, cover, url }
         });
 
         return { content: [{ type: 'text', text: `已向蕊蕊的播放器发送播放指令："${song_name}" - ${artist}` }] };
@@ -215,7 +203,6 @@ function createMcpServer() {
     }
   );
 
-  // 工具4：获取某首歌的完整歌词
   mcp.tool(
     'get_lyrics',
     '获取指定网易云歌曲的完整歌词',
