@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>rui's music</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#0a0a0f;
+  color:#e8e0d8;
+  font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+.container{
+  text-align:center;
+  padding:40px 24px;
+  max-width:420px;
+  width:100%;
+}
+.cover{
+  width:180px;height:180px;
+  border-radius:50%;
+  margin:0 auto 32px;
+  overflow:hidden;
+  box-shadow:0 0 60px rgba(180,140,255,.15);
+  position:relative;
+}
+.cover img{
+  width:100%;height:100%;object-fit:cover;
+}
+.cover.spin{
+  animation:spin 12s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.cover .placeholder{
+  width:100%;height:100%;
+  background:#1a1a24;
+  display:flex;align-items:center;justify-content:center;
+  font-size:48px;color:#333;
+}
+.song-name{
+  font-size:20px;
+  font-weight:600;
+  margin-bottom:6px;
+  color:#f0ebe4;
+}
+.song-artist{
+  font-size:13px;
+  color:#8a8690;
+  margin-bottom:36px;
+}
+.lyric-box{
+  height:200px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+.lyric-current{
+  font-size:22px;
+  font-weight:500;
+  color:#f0ebe4;
+  line-height:1.8;
+  transition:all .5s ease;
+  text-shadow:0 0 30px rgba(180,140,255,.2);
+}
+.status{
+  margin-top:40px;
+  font-size:12px;
+  color:#4a4650;
+}
+.status.online{
+  color:#7c6faa;
+}
+.progress-bar{
+  width:200px;
+  height:2px;
+  background:#1a1a24;
+  border-radius:1px;
+  margin:24px auto 8px;
+  overflow:hidden;
+}
+.progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,#7c6faa,#b48cff);
+  width:0%;
+  transition:width 1s linear;
+}
+.time-info{
+  font-size:11px;
+  color:#4a4650;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="cover" id="cover">
+    <div class="placeholder">&#9835;</div>
+  </div>
+  <div class="song-name" id="songName">--</div>
+  <div class="song-artist" id="songArtist">--</div>
+  <div class="lyric-box">
+    <div class="lyric-current" id="lyricText">she hasn't started yet.</div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="time-info" id="timeInfo"></div>
+  <div class="status" id="status">connecting...</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const es=new EventSource('/stream');
+let lastSong='';
+
+es.onmessage=function(e){
+  try{
+    const d=JSON.parse(e.data);
+    if(!d.syncing){
+      $('lyricText').textContent='she paused for a bit.';
+      $('status').textContent='paused';
+      $('status').className='status';
+      $('cover').classList.remove('spin');
+      return;
+    }
+    if(d.song && d.song!==lastSong){
+      lastSong=d.song;
+      $('songName').textContent=d.song;
+      $('songArtist').textContent=d.artist||'';
+      if(d.cover){
+        $('cover').innerHTML='<img src="'+d.cover+'"/>';
+      }
+    }
+    if(d.lyric){
+      $('lyricText').textContent=d.lyric;
+    }
+    $('cover').classList.add('spin');
+    if(d.duration>0){
+      var pct=(d.elapsed/d.duration*100);
+      $('progressFill').style.width=pct+'%';
+      var fmt=function(s){s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+      $('timeInfo').textContent=fmt(d.elapsed)+' / '+fmt(d.duration);
+    }
+    $('status').textContent='syncing';
+    $('status').className='status online';
+  }catch(err){}
+};
+es.onerror=function(){
+  $('status').textContent='disconnected, retrying...';
+  $('status').className='status';
+};
+</script>
+</body>
+</html>
